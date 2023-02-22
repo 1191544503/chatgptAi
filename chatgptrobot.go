@@ -179,11 +179,33 @@ func handleCore(msgContent MsgContent) {
 		return
 	}
 	fmt.Println("chatgpt text:", response)
-	err = sendWeChatMessage(response, msgContent.FromUsername)
-	if err != nil {
-		return
+	// err = sendWeChatMessage(response, msgContent.FromUsername)
+	// if err != nil {
+	// 	return
+	// }
+	sendMessageWithSegment(response, msgContent.FromUsername)
+}
+
+func sendMessageWithSegment(message string, tousername string) {
+	// 按行分割代码
+	codeLines := strings.Split(message, "\n")
+
+	// 将每行代码拼接为一个完整消息
+	var fullMessage string
+	for _, line := range codeLines {
+		fullMessage += line + "\n"
+		// 如果拼接后的消息长度超过2000，则发送前一个消息并清空fullMessage
+		if len(fullMessage) > 2000 {
+			sendWeChatMessage(fullMessage, tousername)
+			fullMessage = ""
+		}
+	}
+	// 发送最后一个消息
+	if fullMessage != "" {
+		sendWeChatMessage(fullMessage, tousername)
 	}
 }
+
 func extractMessage(body []byte) (*WeChatMessage, error) {
 	var message WeChatMessage
 	err := json.Unmarshal(body, &message)
