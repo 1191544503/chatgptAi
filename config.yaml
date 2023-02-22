@@ -1,0 +1,10 @@
+OpenAI:
+  openaiAPIKey: ''
+  maxTokens: 2048
+  model: 'text-davinci-003'
+WeChat: 
+  token: ''
+  encodingAESKey: ''
+  receiverId: ''
+  corpid: ''
+  corpsecret: ''
