@@ -173,7 +173,7 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleCore(msgContent MsgContent) {
-	response, err := getChatGPTResponse(msgContent.Content)
+	response, err := getChatGPTResponse(msgContent.Content, msgContent.FromUsername)
 	if err != nil {
 		fmt.Println(err.Error())
 		return
@@ -193,12 +193,13 @@ func sendMessageWithSegment(message string, tousername string) {
 	// 将每行代码拼接为一个完整消息
 	var fullMessage string
 	for _, line := range codeLines {
-		fullMessage += line + "\n"
 		// 如果拼接后的消息长度超过2000，则发送前一个消息并清空fullMessage
-		if len(fullMessage) > 2000 {
+		if len(fullMessage)+len(line) > 2000 {
 			sendWeChatMessage(fullMessage, tousername)
 			fullMessage = ""
 		}
+
+		fullMessage += line + "\n"
 	}
 	// 发送最后一个消息
 	if fullMessage != "" {
@@ -215,7 +216,7 @@ func extractMessage(body []byte) (*WeChatMessage, error) {
 	return &message, nil
 }
 
-func getChatGPTResponse(prompt string) (string, error) {
+func getChatGPTResponse(prompt string, tousername string) (string, error) {
 	data := struct {
 		Prompt    string `json:"prompt"`
 		MaxTokens int    `json:"max_tokens"`
@@ -237,6 +238,7 @@ func getChatGPTResponse(prompt string) (string, error) {
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+config.OpenAI.APIKey)
+	req.Header.Set("OpenAI-Session-Id", tousername)
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
