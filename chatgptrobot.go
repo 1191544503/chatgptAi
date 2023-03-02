@@ -16,8 +16,9 @@ import (
 )
 
 const (
-	webhookURL = "https://qyapi.weixin.qq.com/cgi-bin/message/send?access_token=%s"
-	chatGPTAPI = "https://api.openai.com/v1/completions"
+	webhookURL   = "https://qyapi.weixin.qq.com/cgi-bin/message/send?access_token=%s"
+	chatGPTAPI   = "https://api.openai.com/v1/completions"
+	chatGPT35API = "https://api.openai.com/v1/chat/completions"
 )
 
 type AccessTokenResponse struct {
@@ -65,6 +66,25 @@ type ChatGPTResponse struct {
 	Choices []struct {
 		Text string `json:"text"`
 	} `json:"choices"`
+}
+
+type Chat35Response struct {
+	ID      string `json:"id"`
+	Object  string `json:"object"`
+	Created int64  `json:"created"`
+	Choices []struct {
+		Index   int `json:"index"`
+		Message struct {
+			Role    string `json:"role"`
+			Content string `json:"content"`
+		} `json:"message"`
+		FinishReason string `json:"finish_reason"`
+	} `json:"choices"`
+	Usage struct {
+		PromptTokens     int `json:"prompt_tokens"`
+		CompletionTokens int `json:"completion_tokens"`
+		TotalTokens      int `json:"total_tokens"`
+	} `json:"usage"`
 }
 
 type WeChatMessage struct {
@@ -173,7 +193,7 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleCore(msgContent MsgContent) {
-	response, err := getChatGPTResponse(msgContent.Content, msgContent.FromUsername)
+	response, err := getChatGPT35Response(msgContent.Content, msgContent.FromUsername)
 	if err != nil {
 		fmt.Println(err.Error())
 		return
@@ -214,6 +234,53 @@ func extractMessage(body []byte) (*WeChatMessage, error) {
 		return nil, err
 	}
 	return &message, nil
+}
+
+func getChatGPT35Response(prompt string, tousername string) (string, error) {
+	headers := map[string]string{
+		"Content-Type":  "application/json",
+		"Authorization": fmt.Sprintf("Bearer %s", config.OpenAI.APIKey),
+	}
+	data := map[string]interface{}{
+		"model": "gpt-3.5-turbo",
+		"messages": []map[string]string{
+			{
+				"role":    "user",
+				"content": prompt,
+			},
+		},
+	}
+
+	jsonStr, _ := json.Marshal(data)
+	req, _ := http.NewRequest("POST", chatGPT35API, bytes.NewBuffer(jsonStr))
+	for key, value := range headers {
+		req.Header.Set(key, value)
+	}
+
+	client := &http.Client{}
+	resp, _ := client.Do(req)
+	defer resp.Body.Close()
+
+	respBody, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	data2 := make(map[string]interface{})
+	d := json.NewDecoder(bytes.NewReader(respBody))
+	d.UseNumber()
+	_ = d.Decode(&data2)
+	fmt.Println("chatgpt response:", data2)
+	if data2["error"] != nil {
+		return "server error,please retry", nil
+	}
+
+	var chatgptResponse Chat35Response
+	err = json.Unmarshal(respBody, &chatgptResponse)
+	if err != nil {
+		return "", err
+	}
+
+	return chatgptResponse.Choices[0].Message.Content, nil
 }
 
 func getChatGPTResponse(prompt string, tousername string) (string, error) {
